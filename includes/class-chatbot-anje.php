@@ -39,7 +39,7 @@ class ChatBot_ANJE_Formacao {
             'primary_color' => '#007bff',
             'position' => 'right',
             'max_tokens' => 800,
-            'request_timeout' => 60,
+            'request_timeout' => 120,
             'show_on_all_pages' => 'yes',
         ];
         $settings = get_option($this->option_key, []);

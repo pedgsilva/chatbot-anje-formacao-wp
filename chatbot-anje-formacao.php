@@ -34,7 +34,7 @@ register_activation_hook(__FILE__, function() {
         'primary_color' => '#007bff',
         'position' => 'right',
         'max_tokens' => 800,
-        'request_timeout' => 60,
+        'request_timeout' => 120,
     ];
     if (!get_option('chatbot_anje_formacao_settings')) {
         add_option('chatbot_anje_formacao_settings', $defaults);
