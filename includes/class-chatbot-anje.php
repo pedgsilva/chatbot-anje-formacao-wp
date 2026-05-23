@@ -88,7 +88,8 @@ class ChatBot_ANJE_Formacao {
             .chatbot-msg{max-width:85%;padding:10px 14px;border-radius:12px;font-size:13.5px;line-height:1.55;word-wrap:break-word;box-shadow:0 1px 2px rgba(0,0,0,.06)}
             .chatbot-msg-bot{background:#fff;color:#222;align-self:flex-start;border-bottom-left-radius:4px}
             .chatbot-msg-user{background:{$color};color:#fff;align-self:flex-end;border-bottom-right-radius:4px}
-            .chatbot-msg-bot a{color:#0066cc!important;text-decoration:underline!important;word-break:break-all}
+            .chatbot-msg-bot a{color:#0066ee!important;text-decoration:underline!important;font-weight:600!important}
+            .chatbot-msg-bot a:hover{color:#0055cc!important}
             .chatbot-msg-bot strong{color:#1a1a2e}
             .chatbot-msg-bot em{font-style:italic}
             #chatbot-anje-typing{background:#fff;color:#888;align-self:flex-start;font-size:12px;font-style:italic;padding:6px 12px;border-radius:12px;box-shadow:0 1px 2px rgba(0,0,0,.06)}
@@ -228,7 +229,7 @@ class ChatBot_ANJE_Formacao {
                 var html = text
                     .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
                     .replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>')
-                    .replace(/(https?:\/\/[^\s<>"']+)/g,'<a href="$1" target="_blank" rel="noopener">$1</a>')
+                    .replace(/(https?:\/\/[^\s<>"']+)/g,'<a href="$1" target="_blank" rel="noopener" style="color:#0066ee!important;text-decoration:underline!important;font-weight:600!important;background:none!important;border:none!important;opacity:1!important;visibility:visible!important;display:inline!important">$1</a>')
                     .replace(/\n/g,'<br>');
                 d.innerHTML = html;
                 msgs.appendChild(d);
