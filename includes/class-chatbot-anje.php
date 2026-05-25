@@ -330,13 +330,19 @@ class ChatBot_ANJE_Formacao {
             'max_tokens' => $max_tokens,
         ];
 
+        $json_body = json_encode($payload);
+        if ($json_body === false) {
+            error_log('ChatBot ANJE: json_encode failed - ' . json_last_error_msg());
+            return 'Erro ao preparar pedido.';
+        }
+
         $response = wp_remote_post('https://openrouter.ai/api/v1/chat/completions', [
             'timeout' => intval($settings['request_timeout']),
             'headers' => [
                 'Authorization' => 'Bearer ' . $key,
                 'Content-Type' => 'application/json',
             ],
-            'body' => json_encode($payload),
+            'body' => $json_body,
         ]);
 
         if (is_wp_error($response)) {
@@ -347,14 +353,21 @@ class ChatBot_ANJE_Formacao {
         $response_code = wp_remote_retrieve_response_code($response);
         $response_body = wp_remote_retrieve_body($response);
 
+        error_log('ChatBot ANJE: HTTP ' . $response_code . ' - Body length: ' . strlen($response_body));
+
         if ($response_code !== 200) {
-            error_log('ChatBot ANJE: HTTP ' . $response_code . ' - ' . substr($response_body, 0, 500));
+            error_log('ChatBot ANJE: HTTP error body - ' . substr($response_body, 0, 500));
             return 'Erro da API (HTTP ' . $response_code . '). Tente novamente.';
+        }
+
+        if (empty($response_body)) {
+            error_log('ChatBot ANJE: Empty response body');
+            return 'Erro ao processar resposta da API.';
         }
 
         $data = json_decode($response_body, true);
         if (json_last_error() !== JSON_ERROR_NONE) {
-            error_log('ChatBot ANJE: JSON decode error - ' . json_last_error_msg() . ' - Body: ' . substr($response_body, 0, 200));
+            error_log('ChatBot ANJE: JSON decode error - ' . json_last_error_msg() . ' - Body (first 300): ' . substr($response_body, 0, 300));
             return 'Erro ao processar resposta da API.';
         }
 
