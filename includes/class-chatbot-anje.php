@@ -313,7 +313,22 @@ class ChatBot_ANJE_Formacao {
         $model = $settings['model'] ?: 'openrouter/owl-alpha';
         $max_tokens = intval($settings['max_tokens']) ?: 800;
 
-        $system_prompt = $this->get_system_prompt($settings);
+        try {
+            $system_prompt = $this->get_system_prompt($settings);
+        } catch (Exception $e) {
+            error_log('ChatBot ANJE: Erro get_system_prompt - ' . $e->getMessage());
+            $system_prompt = $this->get_fallback_system_prompt();
+        }
+
+        $payload = [
+            'model' => $model,
+            'messages' => [
+                ['role' => 'system', 'content' => $system_prompt],
+                ['role' => 'user', 'content' => 'Pergunta: ' . $msg],
+            ],
+            'temperature' => 0.3,
+            'max_tokens' => $max_tokens,
+        ];
 
         $response = wp_remote_post('https://openrouter.ai/api/v1/chat/completions', [
             'timeout' => intval($settings['request_timeout']),
@@ -321,15 +336,7 @@ class ChatBot_ANJE_Formacao {
                 'Authorization' => 'Bearer ' . $key,
                 'Content-Type' => 'application/json',
             ],
-            'body' => json_encode([
-                'model' => $model,
-                'messages' => [
-                    ['role' => 'system', 'content' => $system_prompt],
-                    ['role' => 'user', 'content' => 'Pergunta: ' . $msg],
-                ],
-                'temperature' => 0.3,
-                'max_tokens' => $max_tokens,
-            ]),
+            'body' => json_encode($payload),
         ]);
 
         if (is_wp_error($response)) {
@@ -347,7 +354,7 @@ class ChatBot_ANJE_Formacao {
 
         $data = json_decode($response_body, true);
         if (json_last_error() !== JSON_ERROR_NONE) {
-            error_log('ChatBot ANJE: JSON decode error - ' . json_last_error_msg());
+            error_log('ChatBot ANJE: JSON decode error - ' . json_last_error_msg() . ' - Body: ' . substr($response_body, 0, 200));
             return 'Erro ao processar resposta da API.';
         }
 
@@ -362,6 +369,32 @@ class ChatBot_ANJE_Formacao {
         }
 
         return $data['choices'][0]['message']['content'];
+    }
+
+    /**
+     * Fallback system prompt without dynamic courses
+     */
+    private function get_fallback_system_prompt() {
+        return "És o assistente virtual da ANJE Formação (anjeformacao.pt).\n"
+            . "\nSOBRE: A ANJE é uma associação de direito privado e utilidade pública fundada em 1986. A ANJE Formação está presente nas 5 regiões administrativas do país, certificada pela DGERT.\n"
+            . "\nEQUIPA:\n"
+            . "- Ana Jogo Mendes - Diretora ANJE Formação\n"
+            . "- Coordenadores: Cláudia Almeida, Cristiana Moreira, Manuela Almeida, Vitória Pereira, Ana Rodrigues (Lisboa), Armanda Ângelo (Coimbra), Cátia Santos (Algarve), Patrícia Nobre (Alentejo)\n"
+            . "- Administrativos: Sara Almeida, Susana Pereira, Fátima Pinto (Coimbra)\n"
+            . "- Teresa Miranda - Comunicação e Marketing\n"
+            . "\nÓRGÃOS SOCIAIS:\n"
+            . "- Presidente: Carlos Carvalho\n"
+            . "- Vice-Presidentes: Nuno Malheiro, Filipa Pinto de Carvalho, Gonçalo Simões de Almeida\n"
+            . "- Presidente Assembleia Geral: Miguel Moreira da Silva\n"
+            . "- Presidente Conselho Fiscal: Catarina Azevedo\n"
+            . "\nCONTACTOS: infoformacao@anje.pt | (+351) 220 108 074\n"
+            . "\nREGRAS:\n"
+            . "- Português de Portugal\n"
+            . "- Usa **negrita** para títulos\n"
+            . "- Inclui URLs completos: https://anjeformacao.pt/curso/...\n"
+            . "- Não listes cursos para perguntas sobre equipa/orgãos\n"
+            . "- Para cursos, sugere visitar https://anjeformacao.pt/cursos/ ou perguntar sobre área específica\n"
+            . "- Se não souberes algo, sugere contactar infoformacao@anje.pt";
     }
 
     /**
