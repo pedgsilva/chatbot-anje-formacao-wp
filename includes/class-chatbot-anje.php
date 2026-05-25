@@ -511,49 +511,42 @@ class ChatBot_ANJE_Formacao {
     private function get_system_prompt($settings) {
         $courses = $this->fetch_courses_from_woocommerce();
 
-        // Build course list grouped by keyword matching
+        // Build compact course list - max 2 per area, max 30 chars per title
         $areas = [];
         $area_keywords = [
             'Gestão' => ['gestao', 'lideran', 'equipa', 'tempo', 'projeto', 'produtividade', 'burnout'],
-            'Marketing' => ['marketing', 'digital', 'seo', 'influenc', 'instagram', 'linkedin', 'marca'],
-            'Vendas' => ['venda', 'comercial', 'neuromarketing', 'vendedor', 'crm'],
-            'Finanças' => ['financ', 'tesouraria', 'poupanca', 'excel', 'powerbi', 'sql', 'python'],
-            'Jurídico' => ['juridic', 'direito', 'rgpd', 'laboral', 'sociedade'],
+            'Marketing' => ['marketing', 'digital', 'seo', 'influenc', 'instagram', 'linkedin'],
+            'Vendas' => ['venda', 'comercial', 'neuromarketing', 'crm'],
+            'Finanças' => ['financ', 'tesouraria', 'excel', 'powerbi', 'sql', 'python'],
+            'Jurídico' => ['juridic', 'direito', 'rgpd', 'laboral'],
             'Comunicação' => ['comunicar', 'storytelling', 'apresentac', 'impacto', 'pnl'],
-            'IA' => ['inteligencia artificial', 'ia', 'claude', 'chatgpt', 'machine learning', 'ia generativa'],
+            'IA' => ['inteligencia artificial', 'ia', 'claude', 'chatgpt', 'generativa'],
             'Hotelaria' => ['hotelaria', 'turismo', 'higiene', 'alimentar'],
-            'Empreendedorismo' => ['empreend', 'negocio', 'plano de neg', 'startup'],
-            'Certificação' => ['certifica', 'icagile', 'coach', 'pnl practitioner'],
+            'Empreendedorismo' => ['empreend', 'negocio', 'plano de neg'],
+            'Certificação' => ['certifica', 'icagile', 'coach'],
         ];
 
         foreach ($courses as $c) {
-            $titulo_lower = strtolower($c['titulo']);
-            $assigned = false;
+            $titulo_lower = mb_strtolower($c['titulo']);
             foreach ($area_keywords as $area => $keywords) {
                 foreach ($keywords as $kw) {
-                    if (strpos($titulo_lower, $kw) !== false) {
+                    if (mb_strpos($titulo_lower, $kw) !== false) {
                         if (!isset($areas[$area])) $areas[$area] = [];
-                        $areas[$area][] = $c;
-                        $assigned = true;
-                        break;
+                        if (count($areas[$area]) < 2) {
+                            $areas[$area][] = $c;
+                        }
+                        break 2;
                     }
                 }
-                if ($assigned) break;
-            }
-            if (!$assigned) {
-                if (!isset($areas['Outros'])) $areas['Outros'] = [];
-                $areas['Outros'][] = $c;
             }
         }
 
-        // Build compact course list (max 35 chars per title)
-        $course_lines = ['CURSOS POR ÁREA:'];
+        $course_lines = ['CURSOS:'];
         foreach ($areas as $area => $cs) {
-            $course_lines[] = "\n$area (" . count($cs) . "):";
-            foreach ($cs as $c) {
-                $titulo = substr($c['titulo'], 0, 35);
-                $course_lines[] = "- $titulo ({$c['preco']})";
-            }
+            $names = array_map(function($c) {
+                return substr($c['titulo'], 0, 28) . ' (' . $c['preco'] . ')';
+            }, $cs);
+            $course_lines[] = $area . ': ' . implode(', ', $names);
         }
         $course_text = implode("\n", $course_lines);
 
@@ -561,24 +554,22 @@ class ChatBot_ANJE_Formacao {
             . "\nSOBRE: A ANJE é uma associação de direito privado e utilidade pública fundada em 1986. A ANJE Formação está presente nas 5 regiões administrativas do país, certificada pela DGERT.\n"
             . "\nEQUIPA:\n"
             . "- Ana Jogo Mendes - Diretora ANJE Formação\n"
-            . "- Coordenadores: Cláudia Almeida, Cristiana Moreira, Manuela Almeida, Vitória Pereira, Ana Rodrigues (Lisboa), Armanda Ângelo (Coimbra), Cátia Santos (Algarve), Patrícia Nobre (Alentejo)\n"
-            . "- Administrativos: Sara Almeida, Susana Pereira, Fátima Pinto (Coimbra)\n"
+            . "- Coordenadores: Cláudia Almeida, Cristiana Moreira, Manuela Almeida, Vitória Pereira\n"
             . "- Teresa Miranda - Comunicação e Marketing\n"
             . "\nÓRGÃOS SOCIAIS:\n"
             . "- Presidente: Carlos Carvalho\n"
             . "- Vice-Presidentes: Nuno Malheiro, Filipa Pinto de Carvalho, Gonçalo Simões de Almeida\n"
             . "- Presidente Assembleia Geral: Miguel Moreira da Silva\n"
             . "- Presidente Conselho Fiscal: Catarina Azevedo\n"
-            . "- Conselho Fiscal: Pedro Cardoso (VP), Sofia Xavier (Vogal), Vítor Almeida (Vogal), Gonçalo Abreu (Vogal)\n"
-            . "\nCONTACTOS: infoformacao@anje.pt | (+351) 220 108 074 | Rua do Conde de Redondo, 91-B, Lisboa\n"
+            . "\nCONTACTOS: infoformacao@anje.pt | (+351) 220 108 074\n"
             . "\n" . $course_text . "\n"
             . "\nREGRAS:\n"
             . "- Português de Portugal\n"
             . "- Usa **negrita** para títulos\n"
             . "- Inclui URLs completos: https://anjeformacao.pt/curso/...\n"
-            . "- Quando listas cursos, inclui o URL completo do curso\n"
+            . "- Quando listas cursos, inclui o URL completo\n"
             . "- Não listes cursos para perguntas sobre equipa/orgãos\n"
-            . "- Se perguntarem sobre cursos de uma área específica, lista os cursos dessa área\n"
+            . "- Se perguntarem sobre cursos de uma área, lista os cursos dessa área com URLs\n"
             . "- Se não souberes algo, sugere contactar infoformacao@anje.pt";
     }
 
