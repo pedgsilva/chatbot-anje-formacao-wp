@@ -313,6 +313,8 @@ class ChatBot_ANJE_Formacao {
         $model = $settings['model'] ?: 'openrouter/owl-alpha';
         $max_tokens = intval($settings['max_tokens']) ?: 800;
 
+        $system_prompt = $this->get_system_prompt($settings);
+
         $response = wp_remote_post('https://openrouter.ai/api/v1/chat/completions', [
             'timeout' => intval($settings['request_timeout']),
             'headers' => [
@@ -322,7 +324,7 @@ class ChatBot_ANJE_Formacao {
             'body' => json_encode([
                 'model' => $model,
                 'messages' => [
-                    ['role' => 'system', 'content' => $this->get_system_prompt($settings)],
+                    ['role' => 'system', 'content' => $system_prompt],
                     ['role' => 'user', 'content' => 'Pergunta: ' . $msg],
                 ],
                 'temperature' => 0.3,
@@ -331,15 +333,35 @@ class ChatBot_ANJE_Formacao {
         ]);
 
         if (is_wp_error($response)) {
-            return 'Erro de ligação à API: ' . $response->get_error_message();
+            error_log('ChatBot ANJE: Erro wp_remote_post - ' . $response->get_error_message());
+            return 'Erro de ligação à API. Verifique a API Key e tente novamente.';
         }
 
-        $data = json_decode(wp_remote_retrieve_body($response), true);
+        $response_code = wp_remote_retrieve_response_code($response);
+        $response_body = wp_remote_retrieve_body($response);
+
+        if ($response_code !== 200) {
+            error_log('ChatBot ANJE: HTTP ' . $response_code . ' - ' . substr($response_body, 0, 500));
+            return 'Erro da API (HTTP ' . $response_code . '). Tente novamente.';
+        }
+
+        $data = json_decode($response_body, true);
+        if (json_last_error() !== JSON_ERROR_NONE) {
+            error_log('ChatBot ANJE: JSON decode error - ' . json_last_error_msg());
+            return 'Erro ao processar resposta da API.';
+        }
+
         if (isset($data['error'])) {
+            error_log('ChatBot ANJE: API error - ' . print_r($data['error'], true));
             return 'Erro da API: ' . ($data['error']['message'] ?? 'Desconhecido');
         }
 
-        return $data['choices'][0]['message']['content'] ?? 'Erro ao gerar resposta.';
+        if (!isset($data['choices'][0]['message']['content'])) {
+            error_log('ChatBot ANJE: Resposta inesperada - ' . substr($response_body, 0, 500));
+            return 'Erro ao gerar resposta. Tente novamente.';
+        }
+
+        return $data['choices'][0]['message']['content'];
     }
 
     /**
