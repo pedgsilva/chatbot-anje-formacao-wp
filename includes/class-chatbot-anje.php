@@ -344,6 +344,7 @@ class ChatBot_ANJE_Formacao {
 
     /**
      * Fetch courses from WooCommerce using WP_Query (no auth needed)
+     * Only returns parent products, not variations or auto-generated events
      */
     private function fetch_courses_from_woocommerce() {
         $cache_key = 'chatbot_anje_courses_cache';
@@ -354,28 +355,35 @@ class ChatBot_ANJE_Formacao {
 
         $courses = [];
 
-        // Try WP_Query first (works without API auth)
+        // Query only parent products (post_parent=0) to avoid variations/events
         $query = new WP_Query([
             'post_type' => 'product',
             'posts_per_page' => 100,
             'post_status' => 'publish',
+            'post_parent' => 0,
+            'orderby' => 'title',
+            'order' => 'ASC',
         ]);
 
         if ($query->have_posts()) {
             while ($query->have_posts()) {
                 $query->the_post();
-                $product = wc_get_product(get_the_ID());
+                $product_id = get_the_ID();
+                $product = wc_get_product($product_id);
                 if (!$product) continue;
 
-                $url = get_permalink(get_the_ID());
+                $url = get_permalink($product_id);
 
-                // Only include products that look like courses (URL contains /curso/)
+                // Only include products whose URL contains /curso/
                 if (strpos($url, '/curso/') === false) {
                     continue;
                 }
 
                 $name = $product->get_name();
                 $price = $product->get_price();
+
+                // Skip products with empty names
+                if (empty(trim($name))) continue;
 
                 $price_display = 'Sob consulta';
                 if ($price === '0' || $price === 0 || $price === '') {
