@@ -367,9 +367,15 @@ class ChatBot_ANJE_Formacao {
                 $product = wc_get_product(get_the_ID());
                 if (!$product) continue;
 
+                $url = get_permalink(get_the_ID());
+
+                // Only include products that look like courses (URL contains /curso/)
+                if (strpos($url, '/curso/') === false) {
+                    continue;
+                }
+
                 $name = $product->get_name();
                 $price = $product->get_price();
-                $url = get_permalink(get_the_ID());
 
                 $price_display = 'Sob consulta';
                 if ($price === '0' || $price === 0 || $price === '') {
@@ -386,34 +392,6 @@ class ChatBot_ANJE_Formacao {
                 ];
             }
             wp_reset_postdata();
-        }
-
-        // If WP_Query returned nothing, try REST API with basic auth
-        if (empty($courses)) {
-            $api_url = get_site_url() . '/wp-json/wc/v3/products?per_page=100&status=publish';
-            $response = wp_remote_get($api_url, ['timeout' => 15]);
-
-            if (!is_wp_error($response) && wp_remote_retrieve_response_code($response) === 200) {
-                $body = json_decode(wp_remote_retrieve_body($response), true);
-                if (!empty($body) && is_array($body)) {
-                    foreach ($body as $product) {
-                        $price = $product['price'] ?? '';
-                        $price_display = 'Sob consulta';
-                        if ($price === '0' || $price === 0 || $price === '') {
-                            $price_display = 'Gratuito';
-                        } elseif (is_numeric($price)) {
-                            $price_display = '€' . number_format((float)$price, 2, ',', '.');
-                        }
-
-                        $courses[] = [
-                            'titulo' => $product['name'] ?? '',
-                            'preco' => $price_display,
-                            'data' => '',
-                            'url' => $product['permalink'] ?? '',
-                        ];
-                    }
-                }
-            }
         }
 
         // If still empty, use fallback
