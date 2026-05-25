@@ -343,9 +343,133 @@ class ChatBot_ANJE_Formacao {
     }
 
     /**
-     * Build system prompt for direct API calls
+     * Fetch courses from WooCommerce REST API
+     */
+    private function fetch_courses_from_woocommerce() {
+        $cache_key = 'chatbot_anje_courses_cache';
+        $cached = get_transient($cache_key);
+        if ($cached !== false) {
+            return $cached;
+        }
+
+        $api_url = get_site_url() . '/wp-json/wc/v3/products?per_page=100&status=publish';
+        $response = wp_remote_get($api_url, ['timeout' => 15]);
+
+        if (is_wp_error($response)) {
+            return $this->get_fallback_courses();
+        }
+
+        $body = json_decode(wp_remote_retrieve_body($response), true);
+        if (empty($body) || !is_array($body)) {
+            return $this->get_fallback_courses();
+        }
+
+        $courses = [];
+        foreach ($body as $product) {
+            $name = $product['name'] ?? '';
+            $price = $product['price'] ?? '';
+            $url = $product['permalink'] ?? '';
+            $date = $product['date_created'] ?? '';
+
+            // Extract date in DD-MM-YYYY format
+            $formatted_date = '';
+            if ($date) {
+                $dt = strtotime($date);
+                $formatted_date = date('d-m-Y', $dt);
+            }
+
+            // Determine price display
+            $price_display = 'Sob consulta';
+            if ($price === '0' || $price === 0 || $price === '') {
+                $price_display = 'Gratuito';
+            } elseif (is_numeric($price)) {
+                $price_display = '€' . number_format((float)$price, 2, ',', '.');
+            }
+
+            $courses[] = [
+                'titulo' => $name,
+                'preco' => $price_display,
+                'data' => $formatted_date,
+                'url' => $url,
+            ];
+        }
+
+        // Cache for 1 hour
+        set_transient($cache_key, $courses, HOUR_IN_SECONDS);
+
+        return $courses;
+    }
+
+    /**
+     * Get fallback courses (hardcoded) if WooCommerce API fails
+     */
+    private function get_fallback_courses() {
+        return [
+            ['titulo' => 'Certificação Icagile RH Ágil', 'preco' => '€1050,00', 'data' => '', 'url' => 'https://anjeformacao.pt/curso/certificacao-icagile-rh-agil/'],
+            ['titulo' => 'Comunicar com Impacto', 'preco' => '€150,00', 'data' => '', 'url' => 'https://anjeformacao.pt/curso/comunicar-com-impacto-online/'],
+            ['titulo' => 'Plano de Negócios', 'preco' => '€150,00', 'data' => '', 'url' => 'https://anjeformacao.pt/curso/como-elaborar-um-plano-de-negocios/'],
+            ['titulo' => 'RGPD para Gestores', 'preco' => '€180,00', 'data' => '', 'url' => 'https://anjeformacao.pt/curso/rgpd-para-gestores/'],
+            ['titulo' => 'Inteligência Artificial Aplicada', 'preco' => '€150,00', 'data' => '', 'url' => 'https://anjeformacao.pt/curso/inteligencia-artificial-aplicada/'],
+            ['titulo' => 'Marketing Digital e E-commerce', 'preco' => '€1800,00', 'data' => '', 'url' => 'https://anjeformacao.pt/curso/programa-executivo-em-marketing-digital/'],
+            ['titulo' => 'Programa Executivo em Vendas', 'preco' => '€1890,00', 'data' => '', 'url' => 'https://anjeformacao.pt/curso/programa-executivo-em-vendas/'],
+            ['titulo' => 'Gestão de Projetos', 'preco' => '€190,00', 'data' => '', 'url' => 'https://anjeformacao.pt/curso/gestao-de-projetos-online/'],
+            ['titulo' => 'Liderança Anti-Burnout', 'preco' => '€120,00', 'data' => '', 'url' => 'https://anjeformacao.pt/curso/lideranca-anti-burnout/'],
+            ['titulo' => 'IA Generativa', 'preco' => '€350,00', 'data' => '', 'url' => 'https://anjeformacao.pt/curso/ia-generativa/'],
+        ];
+    }
+
+    /**
+     * Build system prompt with dynamic courses from WooCommerce
      */
     private function get_system_prompt($settings) {
+        $courses = $this->fetch_courses_from_woocommerce();
+
+        // Build course list grouped by keyword matching
+        $areas = [];
+        $area_keywords = [
+            'Gestão' => ['gestao', 'lideran', 'equipa', 'tempo', 'projeto', 'produtividade', 'burnout'],
+            'Marketing' => ['marketing', 'digital', 'seo', 'influenc', 'instagram', 'linkedin', 'marca'],
+            'Vendas' => ['venda', 'comercial', 'neuromarketing', 'vendedor', 'crm'],
+            'Finanças' => ['financ', 'tesouraria', 'poupanca', 'excel', 'powerbi', 'sql', 'python'],
+            'Jurídico' => ['juridic', 'direito', 'rgpd', 'laboral', 'sociedade'],
+            'Comunicação' => ['comunicar', 'storytelling', 'apresentac', 'impacto', 'pnl'],
+            'IA' => ['inteligencia artificial', 'ia', 'claude', 'chatgpt', 'machine learning', 'ia generativa'],
+            'Hotelaria' => ['hotelaria', 'turismo', 'higiene', 'alimentar'],
+            'Empreendedorismo' => ['empreend', 'negocio', 'plano de neg', 'startup'],
+            'Certificação' => ['certifica', 'icagile', 'coach', 'pnl practitioner'],
+        ];
+
+        foreach ($courses as $c) {
+            $titulo_lower = strtolower($c['titulo']);
+            $assigned = false;
+            foreach ($area_keywords as $area => $keywords) {
+                foreach ($keywords as $kw) {
+                    if (strpos($titulo_lower, $kw) !== false) {
+                        if (!isset($areas[$area])) $areas[$area] = [];
+                        $areas[$area][] = $c;
+                        $assigned = true;
+                        break;
+                    }
+                }
+                if ($assigned) break;
+            }
+            if (!$assigned) {
+                if (!isset($areas['Outros'])) $areas['Outros'] = [];
+                $areas['Outros'][] = $c;
+            }
+        }
+
+        // Build compact course list (max 35 chars per title)
+        $course_lines = ['CURSOS POR ÁREA:'];
+        foreach ($areas as $area => $cs) {
+            $course_lines[] = "\n$area (" . count($cs) . "):";
+            foreach ($cs as $c) {
+                $titulo = substr($c['titulo'], 0, 35);
+                $course_lines[] = "- $titulo ({$c['preco']})";
+            }
+        }
+        $course_text = implode("\n", $course_lines);
+
         return "És o assistente virtual da ANJE Formação (anjeformacao.pt).\n"
             . "\nSOBRE: A ANJE é uma associação de direito privado e utilidade pública fundada em 1986. A ANJE Formação está presente nas 5 regiões administrativas do país, certificada pela DGERT.\n"
             . "\nEQUIPA:\n"
@@ -360,90 +484,7 @@ class ChatBot_ANJE_Formacao {
             . "- Presidente Conselho Fiscal: Catarina Azevedo\n"
             . "- Conselho Fiscal: Pedro Cardoso (VP), Sofia Xavier (Vogal), Vítor Almeida (Vogal), Gonçalo Abreu (Vogal)\n"
             . "\nCONTACTOS: infoformacao@anje.pt | (+351) 220 108 074 | Rua do Conde de Redondo, 91-B, Lisboa\n"
-            . "\nCURSOS POR ÁREA:\n"
-            . "\nCertificação (4):\n"
-            . "- Certificação Icagile RH Ágil (ICP-H) (€1050,00)\n"
-            . "- Certificação International em Coaching (€3870,00)\n"
-            . "- EFA NS de Técnico/a de Informação e Animação Turística (Gratuito)\n"
-            . "- EFA B3 de Operador/a de Distribuição (Gratuito)\n"
-            . "\nComunicação (4):\n"
-            . "- Comunicar com Impacto | Online (€150,00)\n"
-            . "- Certificação International em PNL PRACTITIONER (€2100,00)\n"
-            . "- PNL Basic Empresarial | Online (€297,00)\n"
-            . "- Aplicar storytelling na comunicação (Gratuito)\n"
-            . "\nEmpreendedorismo (1):\n"
-            . "- Como elaborar um Plano de Negócios (€150,00)\n"
-            . "\nFinanças (8):\n"
-            . "- Executar operações de controlo de tesouraria (Gratuito)\n"
-            . "- Excel Avançado aplicado à Gestão (Gratuito)\n"
-            . "- Criação de dashboards dinâmicos com PowerBI (Gratuito)\n"
-            . "- Excel Iniciação – Extra CNQ | Algarve (Gratuito)\n"
-            . "- Introdução ao Python e Machine Learning (€250,00)\n"
-            . "- Produtos financeiros básicos (Gratuito)\n"
-            . "- Controlo de tesouraria – UFCD 0673 (Gratuito)\n"
-            . "- Fundamentos da linguagem SQL (Gratuito)\n"
-            . "\nGestão (14):\n"
-            . "- Implementar práticas de gestão do tempo (Gratuito)\n"
-            . "- Liderança Anti-Burnout (€120,00)\n"
-            . "- Certificação em Gestão de Projetos (€1360,00)\n"
-            . "- Treino Intensivo em Liderança | Lisboa (€1750,00)\n"
-            . "- Como Gerir, Liderar e Motivar Equipas (€150,00)\n"
-            . "- Gestão de Projetos | Online (€190,00)\n"
-            . "- Gestão de Tempo e Gestão de E-mail (€110,00)\n"
-            . "- Liderança e Ferramentas para a Transformação Digital - Norte (Gratuito)\n"
-            . "- Liderança e Ferramentas para a Transformação Digital - Alentejo (Gratuito)\n"
-            . "- Liderança e Ferramentas para a Transformação Digital - Lisboa (Gratuito)\n"
-            . "- Liderança e Ferramentas para a Transformação Digital - Algarve (Gratuito)\n"
-            . "- Gestão de equipas – UFCD 7844 (Gratuito)\n"
-            . "- Liderança e motivação de equipas (Gratuito)\n"
-            . "- Gestão do Tempo e Organização do Trabalho (Gratuito)\n"
-            . "\nHotelaria (5):\n"
-            . "- Ambiente, Segurança, Higiene e Saúde no Trabalho (Gratuito)\n"
-            . "- Higiene e segurança alimentar (Gratuito)\n"
-            . "- EFA NS de Técnico/a de Turismo (Gratuito)\n"
-            . "- EFA PRO de Técnico/a de Turismo Ambiental e Rural (Gratuito)\n"
-            . "\nIA (18):\n"
-            . "- Inteligência Emocional para a Motivação e Tomada de Decisão (€480,00)\n"
-            . "- Inteligência Artificial Aplicada – Claude AI (€150,00)\n"
-            . "- Inteligência Artificial Aplicada ao Setor Imobiliário (€150,00)\n"
-            . "- Inteligência Artificial – o que é e como funciona (Gratuito)\n"
-            . "- IA Generativa como Ferramenta de Otimização (€350,00)\n"
-            . "- Inteligência artificial – avançado (Gratuito)\n"
-            . "- Inteligência Artificial Aplicada aos Negócios (Gratuito)\n"
-            . "- Inteligência Artificial para Potenciar Negócios (Gratuito)\n"
-            . "- Inteligência Artificial: muito além do ChatGPT (€135,00)\n"
-            . "- Programar com sistemas de Inteligência Artificial (Gratuito)\n"
-            . "- Quero criar um negócio! Do plano à ação com IA (Gratuito)\n"
-            . "\nJurídico (3):\n"
-            . "- RGPD para Gestores e Empreendedores (€180,00)\n"
-            . "- Direito das Sociedades – Constituição de Empresas (€175,00)\n"
-            . "- Direito Laboral para Gestores e Empreendedores (€190,00)\n"
-            . "\nMarketing (14):\n"
-            . "- Programa Executivo em Marketing Digital e E-commerce (€1800,00)\n"
-            . "- Instagram para Negócios (Gratuito)\n"
-            . "- Marketing de Influência (Gratuito)\n"
-            . "- Programa Executivo em Marketing Digital e E-business (€3625,00)\n"
-            . "- Linkedin para Negócios (Gratuito)\n"
-            . "- Neuromarketing (€60,00)\n"
-            . "- SEO – Search Engine Optimization (€60,00)\n"
-            . "- Storytelling na Estratégia de Comunicação da Marca (€150,00)\n"
-            . "- Trendmarketing/Marketing digital para pequenos negócios (Gratuito)\n"
-            . "\nVendas (6):\n"
-            . "- Programa Executivo Vendedor de Alta Performance (€280,00)\n"
-            . "- Gerir plataformas de CRM (Gratuito)\n"
-            . "- Processar a venda através de meios interativos (Gratuito)\n"
-            . "- Inteligência Artificial Aplicada à Área Comercial (€150,00)\n"
-            . "- Programa Executivo em Vendas (€1890,00)\n"
-            . "- Conduzir ao Fecho da Venda | Online (€135,00)\n"
-            . "\nOutros (20):\n"
-            . "- Inovar para Crescer: Ferramentas de Gestão (€180,00)\n"
-            . "- Microsoft Copilot aplicado ao contexto profissional (€180,00)\n"
-            . "- RGPC na Prática (€150,00)\n"
-            . "- Felicidade nas Organizações (€135,00)\n"
-            . "- Branqueamento de Capitais em Portugal (€150,00)\n"
-            . "- Os Segredos das Apresentações de Sucesso (€275,00)\n"
-            . "- Programa Executivo – Sensibilização ESG (€280,00)\n"
-            . "- PWIT & ANJE Leadership Development Program (€1050,00)\n"
+            . "\n" . $course_text . "\n"
             . "\nREGRAS:\n"
             . "- Português de Portugal\n"
             . "- Usa **negrita** para títulos\n"
