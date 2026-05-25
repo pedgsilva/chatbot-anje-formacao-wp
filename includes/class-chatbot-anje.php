@@ -343,7 +343,7 @@ class ChatBot_ANJE_Formacao {
     }
 
     /**
-     * Fetch courses from WooCommerce REST API
+     * Fetch courses from WooCommerce using WP_Query (no auth needed)
      */
     private function fetch_courses_from_woocommerce() {
         $cache_key = 'chatbot_anje_courses_cache';
@@ -352,46 +352,73 @@ class ChatBot_ANJE_Formacao {
             return $cached;
         }
 
-        $api_url = get_site_url() . '/wp-json/wc/v3/products?per_page=100&status=publish';
-        $response = wp_remote_get($api_url, ['timeout' => 15]);
-
-        if (is_wp_error($response)) {
-            return $this->get_fallback_courses();
-        }
-
-        $body = json_decode(wp_remote_retrieve_body($response), true);
-        if (empty($body) || !is_array($body)) {
-            return $this->get_fallback_courses();
-        }
-
         $courses = [];
-        foreach ($body as $product) {
-            $name = $product['name'] ?? '';
-            $price = $product['price'] ?? '';
-            $url = $product['permalink'] ?? '';
-            $date = $product['date_created'] ?? '';
 
-            // Extract date in DD-MM-YYYY format
-            $formatted_date = '';
-            if ($date) {
-                $dt = strtotime($date);
-                $formatted_date = date('d-m-Y', $dt);
+        // Try WP_Query first (works without API auth)
+        $query = new WP_Query([
+            'post_type' => 'product',
+            'posts_per_page' => 100,
+            'post_status' => 'publish',
+        ]);
+
+        if ($query->have_posts()) {
+            while ($query->have_posts()) {
+                $query->the_post();
+                $product = wc_get_product(get_the_ID());
+                if (!$product) continue;
+
+                $name = $product->get_name();
+                $price = $product->get_price();
+                $url = get_permalink(get_the_ID());
+
+                $price_display = 'Sob consulta';
+                if ($price === '0' || $price === 0 || $price === '') {
+                    $price_display = 'Gratuito';
+                } elseif (is_numeric($price)) {
+                    $price_display = '€' . number_format((float)$price, 2, ',', '.');
+                }
+
+                $courses[] = [
+                    'titulo' => $name,
+                    'preco' => $price_display,
+                    'data' => '',
+                    'url' => $url,
+                ];
             }
+            wp_reset_postdata();
+        }
 
-            // Determine price display
-            $price_display = 'Sob consulta';
-            if ($price === '0' || $price === 0 || $price === '') {
-                $price_display = 'Gratuito';
-            } elseif (is_numeric($price)) {
-                $price_display = '€' . number_format((float)$price, 2, ',', '.');
+        // If WP_Query returned nothing, try REST API with basic auth
+        if (empty($courses)) {
+            $api_url = get_site_url() . '/wp-json/wc/v3/products?per_page=100&status=publish';
+            $response = wp_remote_get($api_url, ['timeout' => 15]);
+
+            if (!is_wp_error($response) && wp_remote_retrieve_response_code($response) === 200) {
+                $body = json_decode(wp_remote_retrieve_body($response), true);
+                if (!empty($body) && is_array($body)) {
+                    foreach ($body as $product) {
+                        $price = $product['price'] ?? '';
+                        $price_display = 'Sob consulta';
+                        if ($price === '0' || $price === 0 || $price === '') {
+                            $price_display = 'Gratuito';
+                        } elseif (is_numeric($price)) {
+                            $price_display = '€' . number_format((float)$price, 2, ',', '.');
+                        }
+
+                        $courses[] = [
+                            'titulo' => $product['name'] ?? '',
+                            'preco' => $price_display,
+                            'data' => '',
+                            'url' => $product['permalink'] ?? '',
+                        ];
+                    }
+                }
             }
+        }
 
-            $courses[] = [
-                'titulo' => $name,
-                'preco' => $price_display,
-                'data' => $formatted_date,
-                'url' => $url,
-            ];
+        // If still empty, use fallback
+        if (empty($courses)) {
+            return $this->get_fallback_courses();
         }
 
         // Cache for 1 hour
