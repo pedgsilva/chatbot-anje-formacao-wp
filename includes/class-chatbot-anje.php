@@ -320,6 +320,7 @@ class ChatBot_ANJE_Formacao {
             $system_prompt = $this->get_fallback_system_prompt();
         }
 
+        // Build payload with JSON_UNESCAPED_UNICODE to handle special chars
         $payload = [
             'model' => $model,
             'messages' => [
@@ -330,10 +331,15 @@ class ChatBot_ANJE_Formacao {
             'max_tokens' => $max_tokens,
         ];
 
-        $json_body = json_encode($payload);
+        $json_body = json_encode($payload, JSON_UNESCAPED_UNICODE);
         if ($json_body === false) {
             error_log('ChatBot ANJE: json_encode failed - ' . json_last_error_msg());
-            return 'Erro ao preparar pedido.';
+            // Try with fallback prompt (shorter, no special chars)
+            $payload['messages'][0]['content'] = $this->get_fallback_system_prompt();
+            $json_body = json_encode($payload, JSON_UNESCAPED_UNICODE);
+            if ($json_body === false) {
+                return 'Erro ao preparar pedido.';
+            }
         }
 
         $response = wp_remote_post('https://openrouter.ai/api/v1/chat/completions', [
