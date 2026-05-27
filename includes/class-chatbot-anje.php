@@ -398,7 +398,7 @@ class ChatBot_ANJE_Formacao {
             . "\nSOBRE: A ANJE é uma associação de direito privado e utilidade pública fundada em 1986. A ANJE Formação está presente nas 5 regiões administrativas do país, certificada pela DGERT.\n"
             . "\nEQUIPA:\n"
             . "- Ana Jogo Mendes - Diretora ANJE Formação\n"
-            . "- Coordenadores: Cláudia Almeida, Cristiana Moreira, Manuela Almeida, Vitória Pereira, Ana Rodrigues (Lisboa), Armanda Ângelo (Coimbra), Cátia Santos (Algarve), Patrícia Nobre (Alentejo)\n"
+            . "- Coordenadores: Cláudia Almeida, Cristiana Moreira (Formação-Ação), Manuela Almeida, Vitória Pereira (Formação-Ação), Ana Rodrigues (Lisboa), Armanda Ângelo (Coimbra), Cátia Santos (Algarve), Patrícia Nobre (Alentejo)\n"
             . "- Administrativos: Sara Almeida, Susana Pereira, Fátima Pinto (Coimbra)\n"
             . "- Teresa Miranda - Comunicação e Marketing\n"
             . "\nÓRGÃOS SOCIAIS:\n"
